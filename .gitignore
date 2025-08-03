@@ -1,0 +1,6 @@
+#ignoring all build folders
+
+bin
+build
+images
+obj

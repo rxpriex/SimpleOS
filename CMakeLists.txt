@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.10)
 project(SOS C ASM)
 
 # === Cross-Compiler Toolchain ===
-# You can also define this in a separate toolchain.cmake file for reusability.
 set(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_C_COMPILER i686-elf-gcc)
 set(CMAKE_ASM_COMPILER i686-elf-as)
@@ -10,13 +9,32 @@ set(CMAKE_LINKER i686-elf-ld)
 set(CMAKE_OBJCOPY i686-elf-objcopy)
 
 # Compilation flags with debug support
-set(CMAKE_C_FLAGS "-g -O0 -ffreestanding -nostdlib -Wall -Wextra")
-set(CMAKE_ASM_FLAGS "-g --32")
+set(CMAKE_C_FLAGS -g -O0 -ffreestanding -nostdlib -Wall -Wextra)
+set(CMAKE_ASM_FLAGS -g --32)
 
 # === Project Structure ===
 set(SRC_DIR ${CMAKE_SOURCE_DIR}/src)
-set(BOOTLOADER_DIR ${SRC_DIR}/bootloader)
+set(BOOTLOADER_DIR ${SRC_DIR}/arch/i686/bootloader)
 set(KERNEL_DIR ${SRC_DIR}/kernel)
+set(DRIVERS_DIR ${SRC_DIR}/drivers)
+set(SYSTEM_DIR ${SRC_DIR}/system)
+
+# === Source File Lists ===
+set(BOOTLOADER_ASM_FILES
+    ${BOOTLOADER_DIR}/boot.s
+)
+
+set(KERNEL_ASM_FILES
+    ${KERNEL_DIR}/kernel_entry.s
+    ${DRIVERS_DIR}/keyboard_util.s
+)
+
+set(KERNEL_C_FILES
+    ${KERNEL_DIR}/kernel.c
+    ${DRIVERS_DIR}/keyboard.c
+    ${DRIVERS_DIR}/screen_text.c
+    ${SYSTEM_DIR}/shell.c
+)
 
 # === Output Directory Structure ===
 set(BUILD_DIR ${CMAKE_BINARY_DIR})
@@ -25,73 +43,99 @@ set(BIN_DIR ${BUILD_DIR}/bin)
 set(IMG_DIR ${BUILD_DIR}/images)
 
 # Create output directories
-file(MAKE_DIRECTORY ${OBJ_DIR})
 file(MAKE_DIRECTORY ${OBJ_DIR}/bootloader)
 file(MAKE_DIRECTORY ${OBJ_DIR}/kernel)
 file(MAKE_DIRECTORY ${BIN_DIR})
 file(MAKE_DIRECTORY ${IMG_DIR})
 
-# === Object files ===
-set(BOOT_OBJ ${OBJ_DIR}/bootloader/boot.o)
-set(KERNEL_ENTRY_OBJ ${OBJ_DIR}/kernel/kernel_entry.o)
-set(KERNEL_OBJ ${OBJ_DIR}/kernel/kernel.o)
+# === Generate Object Files ===
+# Bootloader objects
+set(BOOTLOADER_OBJS)
+foreach(ASM_FILE ${BOOTLOADER_ASM_FILES})
+    file(RELATIVE_PATH ASM_REL_PATH ${CMAKE_SOURCE_DIR} ${ASM_FILE})
+    string(REGEX REPLACE "[^a-zA-Z0-9]" "_" ASM_NAME ${ASM_REL_PATH})
+    set(OBJ_FILE ${OBJ_DIR}/bootloader/${ASM_NAME}.o)
+    list(APPEND BOOTLOADER_OBJS ${OBJ_FILE})
+    add_custom_command(
+        OUTPUT ${OBJ_FILE}
+        COMMAND ${CMAKE_ASM_COMPILER} ${CMAKE_ASM_FLAGS} -o ${OBJ_FILE} ${ASM_FILE}
+        DEPENDS ${ASM_FILE}
+        COMMENT "Assembling ${ASM_REL_PATH}"
+        VERBATIM
+    )
+endforeach()
 
-# === Output binaries ===
+# Kernel assembly objects
+set(KERNEL_ASM_OBJS)
+foreach(ASM_FILE ${KERNEL_ASM_FILES})
+    file(RELATIVE_PATH ASM_REL_PATH ${CMAKE_SOURCE_DIR} ${ASM_FILE})
+    string(REGEX REPLACE "[^a-zA-Z0-9]" "_" ASM_NAME ${ASM_REL_PATH})
+    set(OBJ_FILE ${OBJ_DIR}/kernel/${ASM_NAME}.o)
+    list(APPEND KERNEL_ASM_OBJS ${OBJ_FILE})
+    add_custom_command(
+        OUTPUT ${OBJ_FILE}
+        COMMAND ${CMAKE_ASM_COMPILER} ${CMAKE_ASM_FLAGS} -o ${OBJ_FILE} ${ASM_FILE}
+        DEPENDS ${ASM_FILE}
+        COMMENT "Assembling ${ASM_REL_PATH}"
+        VERBATIM
+    )
+endforeach()
+
+# Kernel C objects
+set(KERNEL_C_OBJS)
+foreach(C_FILE ${KERNEL_C_FILES})
+    file(RELATIVE_PATH C_REL_PATH ${CMAKE_SOURCE_DIR} ${C_FILE})
+    string(REGEX REPLACE "[^a-zA-Z0-9]" "_" C_NAME ${C_REL_PATH})
+    set(OBJ_FILE ${OBJ_DIR}/kernel/${C_NAME}.o)
+    list(APPEND KERNEL_C_OBJS ${OBJ_FILE})
+    add_custom_command(
+        OUTPUT ${OBJ_FILE}
+        COMMAND ${CMAKE_C_COMPILER} ${CMAKE_C_FLAGS} -c -o ${OBJ_FILE} ${C_FILE}
+        DEPENDS ${C_FILE}
+        COMMENT "Compiling ${C_REL_PATH}"
+        VERBATIM
+    )
+endforeach()
+
+# Combine all kernel objects
+set(KERNEL_OBJS ${KERNEL_ASM_OBJS} ${KERNEL_C_OBJS})
+
+# === Output Binaries ===
 set(BOOTLOADER_BIN ${BIN_DIR}/bootloader.bin)
-set(KERNEL_ELF ${BIN_DIR}/kernel.elf)  # ELF with debug symbols
-set(KERNEL_BIN ${BIN_DIR}/kernel.bin)  # Raw binary
+set(KERNEL_ELF ${BIN_DIR}/kernel.elf)
+set(KERNEL_BIN ${BIN_DIR}/kernel.bin)
 set(BOOTABLE_IMG ${IMG_DIR}/os.img)
 
-# === Assembling bootloader ===
-add_custom_command(OUTPUT ${BOOT_OBJ}
-    COMMAND ${CMAKE_ASM_COMPILER} -g --32 -o ${BOOT_OBJ} ${BOOTLOADER_DIR}/boot.s
-    DEPENDS ${BOOTLOADER_DIR}/boot.s
-    COMMENT "Assembling bootloader"
+# === Linking Bootloader ===
+add_custom_command(
+    OUTPUT ${BOOTLOADER_BIN}
+    COMMAND ${CMAKE_LINKER} -T ${BOOTLOADER_DIR}/linker.ld -o ${BOOTLOADER_BIN} ${BOOTLOADER_OBJS}
+    DEPENDS ${BOOTLOADER_OBJS} ${BOOTLOADER_DIR}/linker.ld
+    COMMENT "Linking bootloader"
     VERBATIM
 )
 
-# === Assembling kernel entry ===
-add_custom_command(OUTPUT ${KERNEL_ENTRY_OBJ}
-    COMMAND ${CMAKE_ASM_COMPILER} -g --32 -o ${KERNEL_ENTRY_OBJ} ${KERNEL_DIR}/kernel_entry.s
-    DEPENDS ${KERNEL_DIR}/kernel_entry.s
-    COMMENT "Assembling kernel entry"
-    VERBATIM
-)
-
-# === Compiling kernel.c ===
-add_custom_command(OUTPUT ${KERNEL_OBJ}
-    COMMAND ${CMAKE_C_COMPILER} -g -O0 -ffreestanding -nostdlib -Wall -Wextra -c -o ${KERNEL_OBJ} ${KERNEL_DIR}/kernel.c
-    DEPENDS ${KERNEL_DIR}/kernel.c
-    COMMENT "Compiling kernel C code"
-    VERBATIM
-)
-
-# === Linking bootloader ===
-add_custom_command(OUTPUT ${BOOTLOADER_BIN}
-    COMMAND ${CMAKE_LINKER} -T ${BOOTLOADER_DIR}/linker.ld -o ${BOOTLOADER_BIN} ${BOOT_OBJ}
-    DEPENDS ${BOOT_OBJ} ${BOOTLOADER_DIR}/linker.ld
-    COMMENT "Linking bootloader with ${CMAKE_LINKER}"
-    VERBATIM
-)
-
-# === Linking kernel (create ELF with debug symbols first) ===
-add_custom_command(OUTPUT ${KERNEL_ELF}
-    COMMAND ${CMAKE_LINKER} -T ${KERNEL_DIR}/linker.ld -o ${KERNEL_ELF} ${KERNEL_ENTRY_OBJ} ${KERNEL_OBJ}
-    DEPENDS ${KERNEL_ENTRY_OBJ} ${KERNEL_OBJ} ${KERNEL_DIR}/linker.ld
+# === Linking Kernel (ELF with debug symbols) ===
+add_custom_command(
+    OUTPUT ${KERNEL_ELF}
+    COMMAND ${CMAKE_LINKER} -T ${KERNEL_DIR}/linker.ld -o ${KERNEL_ELF} ${KERNEL_OBJS}
+    DEPENDS ${KERNEL_OBJS} ${KERNEL_DIR}/linker.ld
     COMMENT "Linking kernel ELF with debug symbols"
     VERBATIM
 )
 
-# === Convert ELF to binary ===
-add_custom_command(OUTPUT ${KERNEL_BIN}
+# === Convert ELF to Binary ===
+add_custom_command(
+    OUTPUT ${KERNEL_BIN}
     COMMAND ${CMAKE_OBJCOPY} -O binary ${KERNEL_ELF} ${KERNEL_BIN}
     DEPENDS ${KERNEL_ELF}
     COMMENT "Converting kernel ELF to binary"
     VERBATIM
 )
 
-# === Creating bootable image ===
-add_custom_command(OUTPUT ${BOOTABLE_IMG}
+# === Creating Bootable Image ===
+add_custom_command(
+    OUTPUT ${BOOTABLE_IMG}
     COMMAND dd if=/dev/zero of=${BOOTABLE_IMG} bs=512 count=2880
     COMMAND dd if=${BOOTLOADER_BIN} of=${BOOTABLE_IMG} bs=512 count=1 conv=notrunc
     COMMAND dd if=${KERNEL_BIN} of=${BOOTABLE_IMG} bs=512 seek=1 conv=notrunc
@@ -100,60 +144,53 @@ add_custom_command(OUTPUT ${BOOTABLE_IMG}
     VERBATIM
 )
 
-# === Add top-level build target ===
+# === Top-Level Build Target ===
 add_custom_target(build ALL
     DEPENDS ${BOOTABLE_IMG}
     COMMENT "Build complete: ${BOOTABLE_IMG}"
 )
 
+# === Run Target ===
 add_custom_target(run
     COMMAND qemu-system-i386 -drive format=raw,file=${BOOTABLE_IMG} -no-reboot -no-shutdown
     DEPENDS build
     COMMENT "Running in QEMU"
 )
 
-# === Debug targets ===
+# === Debug Targets ===
 add_custom_target(debug
     COMMAND qemu-system-i386 -drive format=raw,file=${BOOTABLE_IMG} -s -S -no-reboot -no-shutdown
     DEPENDS build
-    COMMENT "Starting QEMU with GDB server (waiting for connection on :1234)"
+    COMMENT "Starting QEMU with GDB server (waiting on :1234)"
 )
 
-# === NEW: GDB debug session target ===
 add_custom_target(gdb-debug
     COMMAND echo "Starting GDB debug session..."
-    COMMAND echo "Run this in another terminal:"
-    COMMAND echo "gdb ${KERNEL_ELF}"
-    COMMAND echo "Then in GDB:"
-    COMMAND echo "(gdb) target remote localhost:1234"
-    COMMAND echo "(gdb) set architecture i386"
-    COMMAND echo "(gdb) symbol-file ${KERNEL_ELF}"
-    COMMAND echo "(gdb) add-symbol-file ${KERNEL_ELF} 0x1000"
-    COMMAND echo "(gdb) break _start"
-    COMMAND echo "(gdb) break protected_mode"
-    COMMAND echo "(gdb) continue"
-    COMMAND echo ""
-    COMMAND echo "Starting QEMU with GDB server..."
+    COMMAND echo "Run: gdb ${KERNEL_ELF}"
+    COMMAND echo "Then in GDB: target remote localhost:1234"
+    COMMAND echo "set architecture i386"
+    COMMAND echo "symbol-file ${KERNEL_ELF}"
+    COMMAND echo "add-symbol-file ${KERNEL_ELF} 0x1000"
+    COMMAND echo "break _start"
+    COMMAND echo "break protected_mode"
+    COMMAND echo "break kernel_main"
+    COMMAND echo "continue"
     COMMAND qemu-system-i386 -drive format=raw,file=${BOOTABLE_IMG} -s -S -no-reboot -no-shutdown
     DEPENDS build
     COMMENT "Debug session with instructions"
 )
 
-# === NEW: Show debug info ===
 add_custom_target(debug-info
     COMMAND echo "=== Kernel Symbol Table ==="
     COMMAND i686-elf-objdump -t ${KERNEL_ELF}
-    COMMAND echo ""
     COMMAND echo "=== Kernel Disassembly ==="
     COMMAND i686-elf-objdump -d ${KERNEL_ELF}
-    COMMAND echo ""
     COMMAND echo "=== Section Headers ==="
     COMMAND i686-elf-objdump -h ${KERNEL_ELF}
     DEPENDS ${KERNEL_ELF}
     COMMENT "Show kernel debug information"
 )
 
-# === NEW: Automated GDB script ===
 add_custom_target(create-gdb-script
     COMMAND echo "# GDB script for kernel debugging" > ${BUILD_DIR}/debug.gdb
     COMMAND echo "target remote localhost:1234" >> ${BUILD_DIR}/debug.gdb
@@ -183,14 +220,13 @@ add_custom_target(debug-verbose
     COMMENT "Running QEMU with verbose logging to qemu.log"
 )
 
-# === Clean target for organized cleanup ===
+# === Clean Target ===
 add_custom_target(clean-all
     COMMAND ${CMAKE_COMMAND} -E remove_directory ${OBJ_DIR}
     COMMAND ${CMAKE_COMMAND} -E remove_directory ${BIN_DIR}
     COMMAND ${CMAKE_COMMAND} -E remove_directory ${IMG_DIR}
     COMMAND ${CMAKE_COMMAND} -E remove ${BUILD_DIR}/debug.gdb
     COMMAND ${CMAKE_COMMAND} -E remove ${BUILD_DIR}/qemu.log
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${OBJ_DIR}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${OBJ_DIR}/bootloader
     COMMAND ${CMAKE_COMMAND} -E make_directory ${OBJ_DIR}/kernel
     COMMAND ${CMAKE_COMMAND} -E make_directory ${BIN_DIR}

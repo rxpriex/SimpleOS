@@ -1,4 +1,4 @@
-# src/bootloader/boot.s
+# src\arch\i686\bootloader\boot.s
 # 16-bit bootloader transitioning to 32-bit real mode and loading the kernel
 
 .code16

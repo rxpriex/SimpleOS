@@ -1,0 +1,12 @@
+{
+    "files.associations": {
+        "keys_r.h": "c",
+        "system.h": "c",
+        "commands.h": "c",
+        "io.h": "c",
+        "keyboard.h": "c",
+        "vga.h": "c",
+        "ostream": "c",
+        "print": "c"
+    }
+}

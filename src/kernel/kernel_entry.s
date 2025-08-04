@@ -4,6 +4,8 @@
 .code32
 .text
 .globl _start
+.global clear_screen
+.global get_cpu_info
 
 _start:
 protected_mode:
@@ -35,12 +37,36 @@ clear_screen:
     push %ecx
     push %edi
     
-    mov $0xB8000, %edi          # VGA text buffer
-    mov $0x1720, %ax            # Space character (0x20) with white on black (0x07)
-    mov $2000, %ecx             # 80*25 = 2000 characters
-    rep stosw                   # Fill screen with spaces
+    mov $0xB8000, %edi
+    mov $0x0720, %ax     
+    mov $2000, %ecx  
+    rep stosw                  
     
     pop %edi
     pop %ecx
     pop %eax
+    ret
+
+get_cpu_info:
+    # Function prologue: Save base pointer and set up stack frame
+    pushl %ebp
+    movl %esp, %ebp
+
+    # Parameter: pointer to cpu_info_t struct at 8(%ebp)
+    movl 8(%ebp), %edi  # EDI = pointer to cpu_info_t
+
+    # Call CPUID with EAX = 0 to get vendor string
+    movl $0, %eax
+    cpuid
+
+    # CPUID returns vendor string in EBX, EDX, ECX
+    # Store 12-byte vendor string (4 bytes per register)
+    movl %ebx, (%edi)       # First 4 bytes
+    movl %edx, 4(%edi)      # Next 4 bytes
+    movl %ecx, 8(%edi)      # Last 4 bytes
+    movb $0, 12(%edi)       # Null-terminate the string
+
+    # Function epilogue: Restore stack and return
+    movl %ebp, %esp
+    popl %ebp
     ret

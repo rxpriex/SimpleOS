@@ -4,7 +4,7 @@
 #ifndef SYSTEM_DEFINITIONS_H
 #define SYSTEM_DEFINITIONS_H
 
-#define KERNEL_VERSION 0.1
+#define KERNEL_VERSION 0.2
 #define KERNEL_LOADING_ADDRESS 0x10000
 
 typedef struct {

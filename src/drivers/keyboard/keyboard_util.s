@@ -1,5 +1,5 @@
 # src\drivers\keyboard.s
-# basic keyboard utilities written in assembly
+# basic keyboard driver written in assembly
 
 .code32
 .text
@@ -7,7 +7,7 @@
 .global read_key
 
 read_key:
-    #prepeare stack and registers for execution
+    #prep stack and registers for execution
     push %ebp
     mov %esp, %ebp
     push %esi

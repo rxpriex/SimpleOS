@@ -1,5 +1,6 @@
 {
     "files.associations": {
+        "*.s": "gas",
         "keys_r.h": "c",
         "system.h": "c",
         "commands.h": "c",
@@ -7,6 +8,9 @@
         "keyboard.h": "c",
         "vga.h": "c",
         "ostream": "c",
-        "print": "c"
+        "print": "c",
+        "handler.h": "c",
+        "idt.h": "c"
     }
+    
 }

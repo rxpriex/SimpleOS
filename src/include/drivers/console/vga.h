@@ -5,6 +5,8 @@
 #ifndef VGA_CONSTANTS_H
 #define VGA_CONSTANTS_H
 
+#include <stdint.h>
+
 // VGA text mode buffer
 #define VGA_BUFFER ((char *)0xB8000)
 #define VGA_WIDTH 80
@@ -34,5 +36,21 @@ extern void clear_screen();
 static int cursor_x = 0;
 static int cursor_y = 0;
 static unsigned char current_color = 0;
+
+void init_vga();
+
+void reset_vga();
+
+void print(const char *);
+
+void println(const char *);
+
+void renderchar(char);
+
+void print_int(int);
+
+void print_bin(uint32_t);
+
+void print_hex(unsigned int);
 
 #endif 

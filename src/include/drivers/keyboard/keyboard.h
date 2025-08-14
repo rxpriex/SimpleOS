@@ -6,7 +6,6 @@
 #define SCAN_CODES_H
 
 // Scan codes for special keys (PS/2 Scan Code Set 1, port 0x60)
-// Values are in hexadecimal, representing the "make" code for key press
 
 // Function Keys (F1 to F12)
 #define SCANCODE_F1           0x3B

@@ -4,3 +4,4 @@ bin
 build
 images
 obj
+.vscode

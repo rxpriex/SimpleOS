@@ -1,8 +1,8 @@
-# src\arch\i686\bootloader\boot.s
+# src\arch\i686\boot\boot.s
 # 16-bit bootloader transitioning to 32-bit real mode and loading the kernel
 
 .code16
-.text
+.section .text
 .globl _start
 
 _start:
@@ -15,14 +15,12 @@ _start:
     mov $0x7C00, %sp
     sti
 
-    # Print startup message
     mov $msg_start, %si
     call print_string
 
     # Save drive number
     mov %dl, drive_num
     
-    # Print drive number
     mov $msg_drive, %si
     call print_string
     mov drive_num, %al
@@ -36,11 +34,9 @@ _start:
     int $0x13
     jc disk_error
     
-    # Print "Disk reset OK"
     mov $msg_reset_ok, %si
     call print_string
 
-    # Load kernel from disk (to 0x10000 linear address)
     mov $0x02, %ah          # Read sectors
     mov $0x10, %al          # Read 16 sectors (8KB)
     mov $0x00, %ch          # Cylinder 0
@@ -53,32 +49,24 @@ _start:
     int $0x13
     jc disk_error
     
-    # Print "Kernel loaded OK"
     mov $msg_loaded_ok, %si
     call print_string
-
-    # ===== BEGIN PROTECTED MODE SETUP =====
     cli
 
-    # 1. Load GDT
     lgdtl (gdt_descriptor)
 
-    # 2. Enable A20 line (fast method)
     in $0x92, %al
     or $2, %al
     out %al, $0x92
 
-    # 3. Enable protected mode
     mov %cr0, %eax
     or $1, %eax
     mov %eax, %cr0
 
-    # 4. Far jump to 32-bit code
     ljmp $0x08, $protected_mode
 
 .code32
 protected_mode:
-    # Set up protected mode segments
     mov $0x10, %ax
     mov %ax, %ds
     mov %ax, %es
@@ -86,10 +74,9 @@ protected_mode:
     mov %ax, %gs
     mov %ax, %ss
 
-    # Set up stack (0x90000 is safe for early kernel)
+    # Set up stack
     mov $0x90000, %esp
 
-    # Jump to kernel (now at 0x10000 linear)
     jmp 0x10000
 
 .code16
@@ -106,7 +93,7 @@ hang:
     hlt
     jmp hang
 
-# GDT for protected mode
+# GDT
 .align 4
 gdt_start:
     .quad 0x0000000000000000  # Null descriptor
@@ -130,7 +117,6 @@ gdt_descriptor:
     .word gdt_end - gdt_start - 1
     .long gdt_start
 
-# Print string pointed to by SI
 print_string:
     push %ax
     push %bx
@@ -147,13 +133,11 @@ print_done:
     pop %ax
     ret
 
-# Print AL as 2-digit hex
 print_hex_byte:
     push %ax
     push %cx
     mov %al, %cl            # Save original value
     
-    # Print high nibble
     shr $4, %al
     add $0x30, %al          # Convert to ASCII
     cmp $0x39, %al
@@ -163,7 +147,6 @@ print_high:
     mov $0x0E, %ah
     int $0x10
     
-    # Print low nibble
     mov %cl, %al
     and $0x0F, %al
     add $0x30, %al

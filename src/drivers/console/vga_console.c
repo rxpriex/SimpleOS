@@ -1,12 +1,18 @@
 // src\drivers\screen_text.c
 // a simple utility file providing basic text functions(print)
 
-#include "../include/vga.h"
-#include "../include/system.h"
+#include <drivers/console/vga.h>
+#include <kernel//info/System.h>
 
 // Make a VGA color byte
 static inline unsigned char vga_color(unsigned char fg, unsigned char bg) {
   return fg | bg << 4;
+}
+
+void init_vga(){
+  cursor_x = 0;
+  cursor_y = 0;
+  current_color = vga_color(COLOR_LIGHT_GREY, COLOR_BLACK);
 }
 
 // Make a VGA entry (character + color)
@@ -119,6 +125,24 @@ void print_hex(unsigned int num) {
   print(&buffer[i]);
 }
 
+void print_bin(uint32_t num){
+  uint32_t i = 0x80000000;
+
+  while(i > 0){
+    if(num & i){
+      putchar('1');
+    }else{
+      putchar('0');
+    }
+    i >>= 1;
+  }
+}
+
+void reset_vga(){
+  clear_screen();
+  init_vga();
+}
+
 void print_float(float num) {
   unsigned int inum = (int)num;
   print_int(inum);
@@ -127,46 +151,6 @@ void print_float(float num) {
     num *= 10;
   }
   print_int((int)num);
-}
-
-void kernel_init(){
-  cursor_x = 0;
-  cursor_y = 0;
-  current_color = vga_color(COLOR_LIGHT_GREY, COLOR_BLACK);
-}
-
-void print_kernel_startup_test() {
-  println("");
-  println("Testing basic functionality:");
-  // Test integer printing
-  print("- Integer test: ");
-  print_int(42);
-  print(", ");
-  print_int(-123);
-  println("");
-
-  // Test hex printing
-  print("- Hex test: ");
-  print_hex(0xDEADBEEF);
-  println("");
-
-  // Color test
-  println("- Color test:");
-  current_color = vga_color(COLOR_LIGHT_RED, COLOR_BLACK);
-  print("  RED ");
-  current_color = vga_color(COLOR_LIGHT_GREEN, COLOR_BLACK);
-  print("GREEN ");
-  current_color = vga_color(COLOR_LIGHT_BLUE, COLOR_BLACK);
-  print("BLUE ");
-  current_color = vga_color(COLOR_LIGHT_GREY, COLOR_BLACK);
-  println("NORMAL");
-
-  println("");
-  current_color = vga_color(COLOR_LIGHT_GREEN, COLOR_BLACK);
-  println("Kernel initialization complete!");
-  current_color = vga_color(COLOR_LIGHT_GREY, COLOR_BLACK);
-  println("System is ready. Command shell is now available...");
-  print(">");  
 }
 
 void print_system_info() {
@@ -199,5 +183,5 @@ void print_system_info() {
   current_color = vga_color(COLOR_LIGHT_GREEN, COLOR_BLACK);
   print(cit.vendor);
   current_color = vga_color(COLOR_LIGHT_GREY, COLOR_BLACK);
-  print("");
+  println("");
 }

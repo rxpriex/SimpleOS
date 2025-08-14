@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.10)
 project(SOS C ASM)
 
+# Export compile commands for LSP support
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # === Cross-Compiler Toolchain ===
 set(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_C_COMPILER i686-elf-gcc)
@@ -8,16 +11,39 @@ set(CMAKE_ASM_COMPILER i686-elf-as)
 set(CMAKE_LINKER i686-elf-ld)
 set(CMAKE_OBJCOPY i686-elf-objcopy)
 
-# Compilation flags with debug support
-set(CMAKE_C_FLAGS -g -O0 -ffreestanding -nostdlib -Wall -Wextra)
-set(CMAKE_ASM_FLAGS -g --32)
-
 # === Project Structure ===
 set(SRC_DIR ${CMAKE_SOURCE_DIR}/src)
-set(BOOTLOADER_DIR ${SRC_DIR}/arch/i686/bootloader)
+set(BOOTLOADER_DIR ${SRC_DIR}/arch/i686/boot)
 set(KERNEL_DIR ${SRC_DIR}/kernel)
+set(CPU_DIR ${SRC_DIR}/cpu)
 set(DRIVERS_DIR ${SRC_DIR}/drivers)
-set(SYSTEM_DIR ${SRC_DIR}/system)
+set(USER_DIR ${SRC_DIR}/user)
+set(LINKER_DIR ${SRC_DIR}/linker)
+set(INCLUDE_DIR ${SRC_DIR}/include)
+
+# === Include Directories ===
+set(INCLUDE_PATHS
+    ${INCLUDE_DIR}
+    ${INCLUDE_DIR}/kernel
+    ${INCLUDE_DIR}/drivers
+    ${INCLUDE_DIR}/drivers/keyboard
+    ${INCLUDE_DIR}/drivers/console
+    ${INCLUDE_DIR}/user
+    ${INCLUDE_DIR}/arch/i686
+    ${INCLUDE_DIR}/lib
+    ${INCLUDE_DIR}/kernel/memory
+    ${INCLUDE_DIR}/cpu
+)
+
+# Build include flags as a list for C compiler
+set(INCLUDE_FLAGS)
+foreach(INCLUDE_PATH ${INCLUDE_PATHS})
+    list(APPEND INCLUDE_FLAGS "-I${INCLUDE_PATH}")
+endforeach()
+
+# Compilation flags with debug support and include paths
+set(CMAKE_C_FLAGS -g -O0 -ffreestanding -nostdlib -Wall -Wextra ${INCLUDE_FLAGS})
+set(CMAKE_ASM_FLAGS -g --32)
 
 # === Source File Lists ===
 set(BOOTLOADER_ASM_FILES
@@ -25,15 +51,23 @@ set(BOOTLOADER_ASM_FILES
 )
 
 set(KERNEL_ASM_FILES
-    ${KERNEL_DIR}/kernel_entry.s
-    ${DRIVERS_DIR}/keyboard_util.s
+    ${KERNEL_DIR}/init/kernel_entry.s
+    ${KERNEL_DIR}/memory/memory_util.s
+    ${DRIVERS_DIR}/keyboard/keyboard_util.s
+    ${CPU_DIR}/idt/irq.s
+    ${CPU_DIR}/idt/isr.s
+    ${CPU_DIR}/idt/idt.s
 )
 
 set(KERNEL_C_FILES
-    ${KERNEL_DIR}/kernel.c
-    ${DRIVERS_DIR}/keyboard.c
-    ${DRIVERS_DIR}/screen_text.c
-    ${SYSTEM_DIR}/shell.c
+    ${KERNEL_DIR}/init/kernel.c
+    ${KERNEL_DIR}/memory/memory.c
+    ${DRIVERS_DIR}/keyboard/keyboard.c
+    ${DRIVERS_DIR}/console/vga_console.c
+    ${DRIVERS_DIR}/port/port_io.c
+    ${USER_DIR}/shell.c
+    ${CPU_DIR}/idt/idt.c
+    ${CPU_DIR}/idt/handler.c
 )
 
 # === Output Directory Structure ===
@@ -109,8 +143,8 @@ set(BOOTABLE_IMG ${IMG_DIR}/os.img)
 # === Linking Bootloader ===
 add_custom_command(
     OUTPUT ${BOOTLOADER_BIN}
-    COMMAND ${CMAKE_LINKER} -T ${BOOTLOADER_DIR}/linker.ld -o ${BOOTLOADER_BIN} ${BOOTLOADER_OBJS}
-    DEPENDS ${BOOTLOADER_OBJS} ${BOOTLOADER_DIR}/linker.ld
+    COMMAND ${CMAKE_LINKER} -T ${LINKER_DIR}/boot.ld -o ${BOOTLOADER_BIN} ${BOOTLOADER_OBJS}
+    DEPENDS ${BOOTLOADER_OBJS} ${LINKER_DIR}/boot.ld
     COMMENT "Linking bootloader"
     VERBATIM
 )
@@ -118,8 +152,8 @@ add_custom_command(
 # === Linking Kernel (ELF with debug symbols) ===
 add_custom_command(
     OUTPUT ${KERNEL_ELF}
-    COMMAND ${CMAKE_LINKER} -T ${KERNEL_DIR}/linker.ld -o ${KERNEL_ELF} ${KERNEL_OBJS}
-    DEPENDS ${KERNEL_OBJS} ${KERNEL_DIR}/linker.ld
+    COMMAND ${CMAKE_LINKER} -T ${LINKER_DIR}/kernel.ld -o ${KERNEL_ELF} ${KERNEL_OBJS}
+    DEPENDS ${KERNEL_OBJS} ${LINKER_DIR}/kernel.ld
     COMMENT "Linking kernel ELF with debug symbols"
     VERBATIM
 )
@@ -163,63 +197,6 @@ add_custom_target(debug
     DEPENDS build
     COMMENT "Starting QEMU with GDB server (waiting on :1234)"
 )
-
-add_custom_target(gdb-debug
-    COMMAND echo "Starting GDB debug session..."
-    COMMAND echo "Run: gdb ${KERNEL_ELF}"
-    COMMAND echo "Then in GDB: target remote localhost:1234"
-    COMMAND echo "set architecture i386"
-    COMMAND echo "symbol-file ${KERNEL_ELF}"
-    COMMAND echo "add-symbol-file ${KERNEL_ELF} 0x1000"
-    COMMAND echo "break _start"
-    COMMAND echo "break protected_mode"
-    COMMAND echo "break kernel_main"
-    COMMAND echo "continue"
-    COMMAND qemu-system-i386 -drive format=raw,file=${BOOTABLE_IMG} -s -S -no-reboot -no-shutdown
-    DEPENDS build
-    COMMENT "Debug session with instructions"
-)
-
-add_custom_target(debug-info
-    COMMAND echo "=== Kernel Symbol Table ==="
-    COMMAND i686-elf-objdump -t ${KERNEL_ELF}
-    COMMAND echo "=== Kernel Disassembly ==="
-    COMMAND i686-elf-objdump -d ${KERNEL_ELF}
-    COMMAND echo "=== Section Headers ==="
-    COMMAND i686-elf-objdump -h ${KERNEL_ELF}
-    DEPENDS ${KERNEL_ELF}
-    COMMENT "Show kernel debug information"
-)
-
-add_custom_target(create-gdb-script
-    COMMAND echo "# GDB script for kernel debugging" > ${BUILD_DIR}/debug.gdb
-    COMMAND echo "target remote localhost:1234" >> ${BUILD_DIR}/debug.gdb
-    COMMAND echo "set architecture i386" >> ${BUILD_DIR}/debug.gdb
-    COMMAND echo "symbol-file ${KERNEL_ELF}" >> ${BUILD_DIR}/debug.gdb
-    COMMAND echo "add-symbol-file ${KERNEL_ELF} 0x1000" >> ${BUILD_DIR}/debug.gdb
-    COMMAND echo "break _start" >> ${BUILD_DIR}/debug.gdb
-    COMMAND echo "break protected_mode" >> ${BUILD_DIR}/debug.gdb
-    COMMAND echo "break kernel_main" >> ${BUILD_DIR}/debug.gdb
-    COMMAND echo "continue" >> ${BUILD_DIR}/debug.gdb
-    COMMAND echo "layout asm" >> ${BUILD_DIR}/debug.gdb
-    COMMAND echo "GDB script created at ${BUILD_DIR}/debug.gdb"
-    COMMAND echo "Usage: gdb -x ${BUILD_DIR}/debug.gdb"
-    DEPENDS ${KERNEL_ELF}
-    COMMENT "Create GDB debugging script"
-)
-
-add_custom_target(debug-monitor
-    COMMAND qemu-system-i386 -drive format=raw,file=${BOOTABLE_IMG} -monitor stdio -no-reboot -no-shutdown -s -S
-    DEPENDS build
-    COMMENT "Running QEMU with monitor console"
-)
-
-add_custom_target(debug-verbose
-    COMMAND qemu-system-i386 -drive format=raw,file=${BOOTABLE_IMG} -d int,cpu_reset,exec -D qemu.log -no-reboot -no-shutdown
-    DEPENDS build
-    COMMENT "Running QEMU with verbose logging to qemu.log"
-)
-
 # === Clean Target ===
 add_custom_target(clean-all
     COMMAND ${CMAKE_COMMAND} -E remove_directory ${OBJ_DIR}
@@ -232,4 +209,13 @@ add_custom_target(clean-all
     COMMAND ${CMAKE_COMMAND} -E make_directory ${BIN_DIR}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${IMG_DIR}
     COMMENT "Cleaning all build artifacts and recreating directories"
+)
+
+# === Print Include Information ===
+add_custom_target(show-includes
+    COMMAND echo "=== Include Directories ==="
+    COMMAND echo "${INCLUDE_PATHS}"
+    COMMAND echo "=== C Compiler Flags ==="
+    COMMAND echo "${CMAKE_C_FLAGS}"
+    COMMENT "Show configured include paths"
 )

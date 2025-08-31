@@ -135,4 +135,6 @@ typedef struct KeyEvent{
 
 extern void read_key(KeyEvent*);
 
+void wait_on_keypress(char);
+
 #endif // SCAN_CODES_H

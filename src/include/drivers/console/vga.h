@@ -30,12 +30,21 @@
 #define COLOR_LIGHT_BROWN 14
 #define COLOR_WHITE 15
 
+#define DEFAULT_BACKGROUND COLOR_BLACK
+#define DEFAULT_FOREGROUND COLOR_GREEN
+
+#define DEFAULT_VGA DEFAULT_FOREGROUND | DEFAULT_BACKGROUND << 4
+
 extern void clear_screen();
 
 // Global variables for cursor position
 static int cursor_x = 0;
 static int cursor_y = 0;
 static unsigned char current_color = 0;
+
+void set_color(unsigned char);
+
+unsigned char vga_color(unsigned char,unsigned char);
 
 void init_vga();
 
@@ -44,6 +53,7 @@ void reset_vga();
 void print(const char *);
 
 void println(const char *);
+void println_c(const char *, unsigned char);
 
 void renderchar(char);
 
@@ -52,5 +62,7 @@ void print_int(int);
 void print_bin(uint32_t);
 
 void print_hex(unsigned int);
+
+
 
 #endif 

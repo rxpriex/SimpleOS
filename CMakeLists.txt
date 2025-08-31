@@ -62,12 +62,14 @@ set(KERNEL_ASM_FILES
 set(KERNEL_C_FILES
     ${KERNEL_DIR}/init/kernel.c
     ${KERNEL_DIR}/memory/memory.c
+    ${KERNEL_DIR}/info/system.c
     ${DRIVERS_DIR}/keyboard/keyboard.c
     ${DRIVERS_DIR}/console/vga_console.c
     ${DRIVERS_DIR}/port/port_io.c
     ${USER_DIR}/shell.c
     ${CPU_DIR}/idt/idt.c
     ${CPU_DIR}/idt/handler.c
+    ${CPU_DIR}/mm/mm.c
 )
 
 # === Output Directory Structure ===
@@ -136,16 +138,26 @@ set(KERNEL_OBJS ${KERNEL_ASM_OBJS} ${KERNEL_C_OBJS})
 
 # === Output Binaries ===
 set(BOOTLOADER_BIN ${BIN_DIR}/bootloader.bin)
+set(BOOTLOADER_ELF ${BIN_DIR}/bootloader.elf)
 set(KERNEL_ELF ${BIN_DIR}/kernel.elf)
 set(KERNEL_BIN ${BIN_DIR}/kernel.bin)
 set(BOOTABLE_IMG ${IMG_DIR}/os.img)
 
 # === Linking Bootloader ===
 add_custom_command(
-    OUTPUT ${BOOTLOADER_BIN}
-    COMMAND ${CMAKE_LINKER} -T ${LINKER_DIR}/boot.ld -o ${BOOTLOADER_BIN} ${BOOTLOADER_OBJS}
+    OUTPUT ${BOOTLOADER_ELF}
+    COMMAND ${CMAKE_LINKER} -T ${LINKER_DIR}/boot.ld -o ${BOOTLOADER_ELF} ${BOOTLOADER_OBJS}
     DEPENDS ${BOOTLOADER_OBJS} ${LINKER_DIR}/boot.ld
     COMMENT "Linking bootloader"
+    VERBATIM
+)
+
+# Convert ELF to binary (replaces your existing bootloader linking command)
+add_custom_command(
+    OUTPUT ${BOOTLOADER_BIN}
+    COMMAND ${CMAKE_OBJCOPY} -O binary ${BOOTLOADER_ELF} ${BOOTLOADER_BIN}
+    DEPENDS ${BOOTLOADER_ELF}
+    COMMENT "Converting bootloader ELF to binary"
     VERBATIM
 )
 
@@ -186,7 +198,7 @@ add_custom_target(build ALL
 
 # === Run Target ===
 add_custom_target(run
-    COMMAND qemu-system-i386 -drive format=raw,file=${BOOTABLE_IMG} -no-reboot -no-shutdown
+    COMMAND qemu-system-i386 -drive format=raw,file=${BOOTABLE_IMG} -machine pc 
     DEPENDS build
     COMMENT "Running in QEMU"
 )

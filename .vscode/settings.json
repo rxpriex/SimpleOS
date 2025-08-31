@@ -10,7 +10,9 @@
         "ostream": "c",
         "print": "c",
         "handler.h": "c",
-        "idt.h": "c"
+        "idt.h": "c",
+        "interrupts.h": "c",
+        "mm.h": "c"
     }
     
 }

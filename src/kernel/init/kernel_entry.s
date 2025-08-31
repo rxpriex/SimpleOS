@@ -8,18 +8,14 @@
 .global get_cpu_info
 
 _start:
-    # Clear the screen
     call clear_screen
-    
-    # Call C kernel main function
+
     call kernel_main
     
-    # If kernel_main returns, hang
 hang:
     hlt
     jmp hang
 
-# Clear VGA text mode screen (80x25, white on black)
 clear_screen:
     push %eax
     push %ecx

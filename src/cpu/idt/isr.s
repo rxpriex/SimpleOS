@@ -42,6 +42,11 @@ ISR_NOERRCODE 18    # Machine Check
 ISR_NOERRCODE 19    # SIMD Floating Point Exception
 ISR_NOERRCODE 20    # Virtualization Exception
 ISR_ERRCODE   21    # Control Protection Exception
+.global isr22 # Runtime assert
+isr22: 
+    cli
+    pushl $22 # top of the stack should be return address now in place of error code now? TODO: verify
+    jmp isr_stub  
 
 isr_stub:
     pushal

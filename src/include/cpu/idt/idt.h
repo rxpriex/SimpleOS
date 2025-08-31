@@ -8,6 +8,8 @@
 #define IDT_TYPE_TRAP_GATE       0x8F  // 32-bit trap gate
 
 #include <stdint.h>
+#include <drivers/console/vga.h>
+#include <kernel/info/system.h>
 
 struct idt_entry{
     uint16_t handler_low;
@@ -24,7 +26,11 @@ struct idt_base{
 
 void init_idt(void);
 void set_gate(uint8_t,uint32_t,uint16_t,uint8_t);
+
 uint32_t read_handler(uint8_t);
+void request_int(uint8_t);
+
+void runtime_assert(unsigned char, const char*);
 
 // ISR handlers(isr.s)
 extern void isr0(void);   // Divide by Zero
@@ -49,6 +55,7 @@ extern void isr18(void);  // Machine Check
 extern void isr19(void);  // SIMD Floating Point Exception
 extern void isr20(void);  // Virtualization Exception
 extern void isr21(void);  // Control Protection Exception
+extern void isr22(void);  // Runtime assert
 
 // IRQ handlers(irq.s)
 extern void irq0(void);   // Timer

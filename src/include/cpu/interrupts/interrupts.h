@@ -30,9 +30,9 @@ static enum interrupt {
     INT_SIMD_FLOATING_POINT_EXCEPTION = 19,
     INT_VIRTUALIZATION_EXCEPTION = 20,
     INT_CONTROL_PROTECTION_EXCEPTION = 21,
+    INT_RUNTIME_ASSERT_FAILED = 22,
     
-    // Reserved exceptions (22-31)
-    INT_RESERVED_22 = 22,
+    // Reserved exceptions (23-31)
     INT_RESERVED_23 = 23,
     INT_RESERVED_24 = 24,
     INT_RESERVED_25 = 25,
@@ -90,7 +90,7 @@ static const char* interrupt_names[] = {
     "SIMD Floating Point Exception",    // 19
     "Virtualization Exception",         // 20
     "Control Protection Exception",     // 21
-    "Reserved", "Reserved", "Reserved", "Reserved", "Reserved", // 22-26
+    "Runtime assert failed", "Reserved", "Reserved", "Reserved", "Reserved", // 22-26
     "Reserved", "Reserved", "Reserved", "Reserved", "Reserved", // 27-31
     
     // Hardware IRQs (32-47)

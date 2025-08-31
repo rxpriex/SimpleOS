@@ -2,18 +2,28 @@
 // implementation file for idt.h
 
 #include <cpu/idt/idt.h>
-#include <drivers/console/vga.h>
 
 static struct idt_entry idt[256];
 static struct idt_base idt_head;
 
 extern void idt_load(uint32_t);
 
+void runtime_assert(unsigned char check, const char* error_msg){
+    set_last_error(error_msg);
+    if(!check){
+        request_int(22);
+    }
+}
+
 uint32_t read_handler(uint8_t code){
     uint32_t handler = 0x0;
     handler |= idt[code].handler_high;
     handler = (handler << 16)|idt[code].handler_low;
     return handler;
+}
+
+void request_int(uint8_t code){
+    ((void(*)(void))read_handler(code))();
 }
 
 void set_gate(uint8_t num, uint32_t handler, uint16_t sel, uint8_t flags){
@@ -29,13 +39,21 @@ void init_idt(){
     idt_head.limit = sizeof(idt) - 1;
 
     print("Idt base address: ");
+    set_color(vga_color(COLOR_LIGHT_MAGENTA,DEFAULT_BACKGROUND));
     print_bin(idt_head.base_addr);
+    set_color(DEFAULT_VGA);
     println("");
     print("Idt limit: ");
-    print_int(idt_head.limit);
+    set_color(vga_color(COLOR_LIGHT_MAGENTA,DEFAULT_BACKGROUND));
+    print_int(idt_head.limit/sizeof(struct idt_entry));
+    set_color(DEFAULT_VGA);
     println("");
 
-    print("Clearing ");print_int(idt_head.limit/sizeof(struct idt_entry));println(" idt entries...");
+    print("Clearing ");
+    set_color(vga_color(COLOR_LIGHT_MAGENTA,DEFAULT_BACKGROUND));
+    print_int(idt_head.limit/sizeof(struct idt_entry));
+    set_color(DEFAULT_VGA);
+    println(" idt entries");
     for(int i = 0; i < idt_head.limit/sizeof(struct idt_entry);  i++){
         idt[i].handler_low = 0;
         idt[i].selector = 0;
@@ -44,7 +62,11 @@ void init_idt(){
         idt[i].handler_high = 0;
     }
 
-    print("Setting gates of type: ");print_hex(IDT_TYPE_INTERRUPT_GATE);println("...");
+    print("Setting gates of type: ");
+    set_color(vga_color(COLOR_LIGHT_MAGENTA,DEFAULT_BACKGROUND));
+    print_hex(IDT_TYPE_INTERRUPT_GATE);
+    set_color(DEFAULT_VGA);
+    println("");
     set_gate(0, (uint32_t)isr0, 0x08, IDT_TYPE_INTERRUPT_GATE);
     set_gate(1, (uint32_t)isr1, 0x08, IDT_TYPE_INTERRUPT_GATE);
     set_gate(2, (uint32_t)isr2, 0x08, IDT_TYPE_INTERRUPT_GATE);
@@ -67,6 +89,7 @@ void init_idt(){
     set_gate(19, (uint32_t)isr19, 0x08, IDT_TYPE_INTERRUPT_GATE);
     set_gate(20, (uint32_t)isr20, 0x08, IDT_TYPE_INTERRUPT_GATE);
     set_gate(21, (uint32_t)isr21, 0x08, IDT_TYPE_INTERRUPT_GATE);
+    set_gate(22, (uint32_t)isr22, 0x08, IDT_TYPE_INTERRUPT_GATE);
     
     set_gate(32, (uint32_t)irq0, 0x08, IDT_TYPE_INTERRUPT_GATE);
     set_gate(33, (uint32_t)irq1, 0x08, IDT_TYPE_INTERRUPT_GATE);
@@ -85,6 +108,8 @@ void init_idt(){
     set_gate(46, (uint32_t)irq14, 0x08, IDT_TYPE_INTERRUPT_GATE);
     set_gate(47, (uint32_t)irq15, 0x08, IDT_TYPE_INTERRUPT_GATE);
 
-    println("Loading idt...");
+    set_color(vga_color(COLOR_LIGHT_CYAN,DEFAULT_BACKGROUND));
+    println("Loading idt...\n");
+    set_color(DEFAULT_VGA);
     __asm__ volatile("lidt %0" : : "m" (idt_head));
 }

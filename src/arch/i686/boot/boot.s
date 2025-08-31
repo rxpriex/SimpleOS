@@ -2,11 +2,23 @@
 # 16-bit bootloader transitioning to 32-bit real mode and loading the kernel
 
 .code16
+
+.section .data
+    .struct 0
+boot_data_kernel_address:
+    .long 0
+boot_data_kernel_size:
+    .long 0
+boot_data_memory_size:
+    .long 0
+boot_data_size:
+
+.equ BOOT_DATA_SIZE, boot_data_size
+
 .section .text
-.globl _start
+.global _start
 
 _start:
-    # Set up segments and stack
     cli
     xor %ax, %ax
     mov %ax, %ds
@@ -15,30 +27,16 @@ _start:
     mov $0x7C00, %sp
     sti
 
-    mov $msg_start, %si
-    call print_string
-
-    # Save drive number
     mov %dl, drive_num
-    
-    mov $msg_drive, %si
-    call print_string
-    mov drive_num, %al
-    call print_hex_byte
-    mov $msg_newline, %si
-    call print_string
     
     # Reset disk system
     mov $0x00, %ah
     mov drive_num, %dl
     int $0x13
     jc disk_error
-    
-    mov $msg_reset_ok, %si
-    call print_string
 
     mov $0x02, %ah          # Read sectors
-    mov $0x10, %al          # Read 16 sectors (8KB)
+    mov $0x40, %al          # Read 64 sectors (32KB) TODO: prevent kernel from not being read all the way
     mov $0x00, %ch          # Cylinder 0
     mov $0x02, %cl          # Sector 2
     mov $0x00, %dh          # Head 0
@@ -48,10 +46,9 @@ _start:
     xor %bx, %bx
     int $0x13
     jc disk_error
-    
-    mov $msg_loaded_ok, %si
-    call print_string
     cli
+
+    call populate_boot_data
 
     lgdtl (gdt_descriptor)
 
@@ -65,6 +62,33 @@ _start:
 
     ljmp $0x08, $protected_mode
 
+read_cmos_memory:
+    # Read extended memory from CMOS 0x30-0x31
+    movb    $0x30, %al          # CMOS register 0x30
+    outb    %al, $0x70          # Select CMOS register
+    inb     $0x71, %al          # Read low byte
+    movb    %al, %bl
+    
+    movb    $0x31, %al          # CMOS register 0x31  
+    outb    %al, $0x70          # Select CMOS register
+    inb     $0x71, %al          # Read high byte
+    movb    %al, %bh
+    
+    ret
+
+populate_boot_data:
+    movl $boot_data_struct, %eax
+    movl kernel_load, %ebx
+    movl %ebx, boot_data_kernel_address(%eax)
+    movl $0x8000, %ebx  # 32KB (64 sectors)
+    movl %ebx, boot_data_kernel_size(%eax)
+    xor %ebx,%ebx
+    xor %eax,%eax
+    call read_cmos_memory
+    movl $boot_data_struct, %eax
+    movl %ebx, boot_data_memory_size(%eax)
+    ret
+
 .code32
 protected_mode:
     mov $0x10, %ax
@@ -77,23 +101,19 @@ protected_mode:
     # Set up stack
     mov $0x90000, %esp
 
-    jmp 0x10000
+    pushl $boot_data_struct
+    pushl boot_magic
+
+    jmp *kernel_load
 
 .code16
 disk_error:
-    mov $msg_disk_error, %si
-    call print_string
-    mov %ah, %al
-    call print_hex_byte
     jmp hang
 
 hang:
-    mov $msg_hang, %si
-    call print_string
     hlt
     jmp hang
 
-# GDT
 .align 4
 gdt_start:
     .quad 0x0000000000000000  # Null descriptor
@@ -117,64 +137,12 @@ gdt_descriptor:
     .word gdt_end - gdt_start - 1
     .long gdt_start
 
-print_string:
-    push %ax
-    push %bx
-    mov $0x0E, %ah          # Teletype output
-    mov $0x07, %bl          # White on black
-print_loop:
-    lodsb                   # Load byte from SI into AL
-    test %al, %al           # Check if null terminator
-    jz print_done
-    int $0x10               # BIOS video interrupt
-    jmp print_loop
-print_done:
-    pop %bx
-    pop %ax
-    ret
-
-print_hex_byte:
-    push %ax
-    push %cx
-    mov %al, %cl            # Save original value
-    
-    shr $4, %al
-    add $0x30, %al          # Convert to ASCII
-    cmp $0x39, %al
-    jle print_high
-    add $0x07, %al          # A-F
-print_high:
-    mov $0x0E, %ah
-    int $0x10
-    
-    mov %cl, %al
-    and $0x0F, %al
-    add $0x30, %al
-    cmp $0x39, %al
-    jle print_low
-    add $0x07, %al          # A-F
-print_low:
-    mov $0x0E, %ah
-    int $0x10
-    
-    pop %cx
-    pop %ax
-    ret
-
-# Messages
-msg_start:      .asciz "Bootloader starting...\r\n"
-msg_drive:      .asciz "Boot drive: 0x"
-msg_newline:    .asciz "\r\n"
-msg_reset_ok:   .asciz "Disk reset OK\r\n"
-msg_loading:    .asciz "Loading kernel...\r\n"
-msg_loaded_ok:  .asciz "Kernel loaded OK\r\n"
-msg_first_byte: .asciz "First byte: 0x"
-msg_jumping:    .asciz "\r\nPerforming long jump to kernel[32]\r\n"
-msg_disk_error: .asciz "Disk error! Code: 0x"
-msg_hang:       .asciz "\r\nSystem halted.\r\n"
-
-# Variables
 drive_num:      .byte 0x00
+boot_magic:     .long 0x07A37AAF
+kernel_load:    .long 0x10000
+
+boot_data_struct:
+    .space BOOT_DATA_SIZE
 
 # Pad to 510 bytes and add boot signature
 .fill 510-(.-_start), 1, 0

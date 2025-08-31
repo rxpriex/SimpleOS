@@ -5,14 +5,14 @@
 #include <kernel//info/System.h>
 
 // Make a VGA color byte
-static inline unsigned char vga_color(unsigned char fg, unsigned char bg) {
+unsigned char vga_color(unsigned char fg, unsigned char bg) {
   return fg | bg << 4;
 }
 
 void init_vga(){
   cursor_x = 0;
   cursor_y = 0;
-  current_color = vga_color(COLOR_LIGHT_GREY, COLOR_BLACK);
+  current_color = DEFAULT_VGA;
 }
 
 // Make a VGA entry (character + color)
@@ -31,8 +31,9 @@ void renderchar(char c){
 void takechar(){
     if(cursor_x != 0){
         cursor_x--;
-        current_color = vga_color(COLOR_LIGHT_GREY, COLOR_BLACK);
+        current_color = vga_color(COLOR_BLACK, COLOR_WHITE);
         renderchar(' ');
+        current_color = DEFAULT_VGA;
     }
 }
 
@@ -51,17 +52,21 @@ void putchar(char c) {
 
     cursor_x++;
   }
-
-  // Handle line wrapping
+  
   if (cursor_x >= VGA_WIDTH) {
     cursor_x = 0;
     cursor_y++;
   }
 
-  // Handle scrolling (simple version - just wrap to top)
   if (cursor_y >= VGA_HEIGHT) {
     cursor_y = 0;
   }
+}
+
+void print_c(const char *str,unsigned char vga){
+  current_color = vga;
+  print(str);
+  current_color = DEFAULT_VGA;
 }
 
 // Print a string
@@ -76,6 +81,12 @@ void print(const char *str) {
 void println(const char *str) {
   print(str);
   putchar('\n');
+}
+
+void println_c(const char *str, unsigned char vga){
+  current_color = vga;
+  println(str);
+  current_color = DEFAULT_VGA;
 }
 
 // Convert integer to string (simple implementation)
@@ -102,6 +113,10 @@ void print_int(int num) {
   while (i > 0) {
     putchar(buffer[--i]);
   }
+}
+
+void set_color(unsigned char vga){
+   current_color = vga;
 }
 
 // Print hex number
@@ -154,13 +169,14 @@ void print_float(float num) {
 }
 
 void print_system_info() {
-  current_color = vga_color(COLOR_LIGHT_CYAN, COLOR_BLACK);
+  current_color = vga_color(COLOR_CYAN, DEFAULT_BACKGROUND);
   print("=== SOS Kernel v");
-  print_float(KERNEL_VERSION);
+  print_int((int)&__KERNEL_VERSION_MAJOR);
+  print(".");
+  print_int((int)&__KERNEL_VERSION_MINOR);
   print(" ===");
 
-  // Reset to normal color
-  current_color = vga_color(COLOR_LIGHT_GREY, COLOR_BLACK);
+  current_color = DEFAULT_VGA;
   println("");
   println("Kernel successfully loaded and running!");
   println("This is a basic 32-bit i686 kernel.");
@@ -168,20 +184,18 @@ void print_system_info() {
 
   // Show some system info
   print("Kernel loaded at: ");
-  current_color = vga_color(COLOR_LIGHT_GREEN, COLOR_BLACK);
-  print_hex(KERNEL_LOADING_ADDRESS);
-  current_color = vga_color(COLOR_LIGHT_GREY, COLOR_BLACK);
+  current_color = vga_color(COLOR_LIGHT_MAGENTA, DEFAULT_BACKGROUND);
+  print_hex((int)&__KERNEL_LOADING_ADDRESS);
+  current_color = DEFAULT_VGA;
   println("");
   print("VGA buffer at: ");
-  current_color = vga_color(COLOR_LIGHT_GREEN, COLOR_BLACK);
+  current_color = vga_color(COLOR_LIGHT_MAGENTA, DEFAULT_BACKGROUND);
   print_hex((unsigned int)VGA_BUFFER);
-  current_color = vga_color(COLOR_LIGHT_GREY, COLOR_BLACK);
+  current_color = DEFAULT_VGA;
   println("");
   print("CPU: ");
   cpu_info_t cit;
   get_cpu_info(&cit);
-  current_color = vga_color(COLOR_LIGHT_GREEN, COLOR_BLACK);
-  print(cit.vendor);
-  current_color = vga_color(COLOR_LIGHT_GREY, COLOR_BLACK);
+  print_c(cit.vendor,vga_color(COLOR_LIGHT_MAGENTA,DEFAULT_BACKGROUND));
   println("");
 }
